@@ -560,7 +560,6 @@ describe("Yoga Prop Setters - marginY", () => {
   })
 })
 
-
 describe("Yoga Prop Setters - marginTop", () => {
   test("accepts valid number", () => {
     const renderable = new TestRenderable(testRenderer, { id: "test-margin-top" })
@@ -690,7 +689,7 @@ describe("Yoga Prop Setters - paddingX", () => {
       renderable.paddingX = 10
     }).not.toThrow()
   })
-  
+
   test("accepts percentage", () => {
     const renderable = new TestRenderable(testRenderer, { id: "test-padding-x-percent" })
     expect(() => {
