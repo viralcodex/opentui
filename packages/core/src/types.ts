@@ -37,6 +37,8 @@ export interface CursorStyleOptions {
   blinking: boolean
 }
 
+export type MousePointerStyle = "default" | "pointer" | "text" | "crosshair" | "move" | "not-allowed"
+
 export enum DebugOverlayCorner {
   topLeft = 0,
   topRight = 1,

@@ -21,7 +21,7 @@ import {
 } from "./lib/yoga.options"
 import { maybeMakeRenderable, type VNode } from "./renderables/composition/vnode"
 import type { MouseEvent } from "./renderer"
-import type { RenderContext } from "./types"
+import type { MousePointerStyle, RenderContext } from "./types"
 import {
   validateOptions,
   isPositionType,
@@ -33,6 +33,7 @@ import {
   isPositionTypeType,
   isOverflowType,
 } from "./lib/renderable.validations"
+import { ANSI } from "./ansi"
 
 const BrandedRenderable: unique symbol = Symbol.for("@opentui/core/Renderable")
 
@@ -124,6 +125,8 @@ export interface RenderableOptions<T extends BaseRenderable = BaseRenderable> ex
   onPaste?: (this: T, event: PasteEvent) => void
 
   onKeyDown?: (key: KeyEvent) => void
+
+  hoverCursorStyle?: MousePointerStyle
 
   onSizeChange?: (this: T) => void
 }
@@ -231,6 +234,7 @@ export abstract class Renderable extends BaseRenderable {
   private _mouseListeners: Partial<Record<MouseEventType, (event: MouseEvent) => void>> = {}
   private _pasteListener: ((event: PasteEvent) => void) | undefined = undefined
   private _keyListeners: Partial<Record<"down", (key: KeyEvent) => void>> = {}
+  private _hoverCursorStyle: MousePointerStyle | undefined = undefined
 
   protected yogaNode: YogaNode
   protected _positionType: PositionTypeString = "relative"
@@ -1539,6 +1543,18 @@ export abstract class Renderable extends BaseRenderable {
     return this._keyListeners["down"]
   }
 
+  public set hoverCursorStyle(style: MousePointerStyle | undefined) {
+    this._hoverCursorStyle = style
+  }
+  public get hoverCursorStyle(): MousePointerStyle | undefined {
+    return this._hoverCursorStyle
+  }
+
+  public getCurrentHoverCursorStyle(): MousePointerStyle | undefined {
+    if (this._hoverCursorStyle) return this._hoverCursorStyle
+    return this.parent?.getCurrentHoverCursorStyle()
+  }
+
   public set onSizeChange(handler: (() => void) | undefined) {
     this._sizeChangeListener = handler
   }
@@ -1559,6 +1575,7 @@ export abstract class Renderable extends BaseRenderable {
     this.onMouseScroll = options.onMouseScroll
     this.onPaste = options.onPaste
     this.onKeyDown = options.onKeyDown
+    this.hoverCursorStyle = options.hoverCursorStyle
     this.onSizeChange = options.onSizeChange
   }
 }

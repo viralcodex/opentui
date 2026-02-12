@@ -60,6 +60,7 @@ pub const ANSI = struct {
 
     pub const resetCursorColor = "\x1b]112\x07";
     pub const resetCursorColorFallback = "\x1b]12;default\x07";
+    pub const resetMousePointer = "\x1b]22;\x07";
     pub const saveCursorState = "\x1b[s";
     pub const restoreCursorState = "\x1b[u";
 

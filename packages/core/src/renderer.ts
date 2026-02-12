@@ -3,6 +3,7 @@ import { Renderable, RootRenderable } from "./Renderable"
 import {
   type CursorStyle,
   DebugOverlayCorner,
+  type MousePointerStyle,
   type RenderContext,
   type ThemeMode,
   type ViewportBounds,
@@ -422,6 +423,7 @@ export class CliRenderer extends EventEmitter implements RenderContext {
   private _latestPointer: { x: number; y: number } = { x: 0, y: 0 }
   private _hasPointer: boolean = false
   private _lastPointerModifiers: RawMouseEvent["modifiers"] = { shift: false, alt: false, ctrl: false }
+  private _currentMousePointerStyle: MousePointerStyle | undefined = undefined
 
   private _currentFocusedRenderable: Renderable | null = null
   private lifecyclePasses: Set<Renderable> = new Set()
@@ -1274,6 +1276,8 @@ export class CliRenderer extends EventEmitter implements RenderContext {
           })
           maybeRenderable.processMouseEvent(event)
         }
+
+        this.updateMousePointerOnHover(maybeRenderable)
       }
 
       if (this.capturedRenderable && mouseEvent.type !== "up") {
@@ -1369,6 +1373,29 @@ export class CliRenderer extends EventEmitter implements RenderContext {
       })
       hitRenderable.processMouseEvent(event)
     }
+
+    this.updateMousePointerOnHover(hitRenderable)
+  }
+
+  private updateMousePointerOnHover(renderable: Renderable | undefined): void {
+    const cursorStyle = renderable?.getCurrentHoverCursorStyle()
+    if (cursorStyle) {
+      this.setMousePointer(cursorStyle)
+    } else {
+      this.resetMousePointer()
+    }
+  }
+
+  public setMousePointer(shape: MousePointerStyle): void {
+    if (this._currentMousePointerStyle === shape) return
+    this._currentMousePointerStyle = shape
+    this.writeOut(ANSI.setMousePointer(shape))
+  }
+
+  public resetMousePointer(): void {
+    if (this._currentMousePointerStyle === undefined) return
+    this._currentMousePointerStyle = undefined
+    this.writeOut(ANSI.resetMousePointer)
   }
 
   public hitTest(x: number, y: number): number {
@@ -1756,6 +1783,8 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     if (this._destroyFinalized) return
     this._destroyFinalized = true
     this._destroyPending = false
+
+    this.resetMousePointer()
 
     process.removeListener("SIGWINCH", this.sigwinchHandler)
     process.removeListener("uncaughtException", this.handleError)
