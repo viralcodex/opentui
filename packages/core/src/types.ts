@@ -37,7 +37,7 @@ export type MousePointerStyle = "default" | "pointer" | "text" | "crosshair" | "
 export interface CursorStyleOptions {
   style?: CursorStyle
   blinking?: boolean
-  color?: RGBA,
+  color?: RGBA
   cursor?: MousePointerStyle
 }
 

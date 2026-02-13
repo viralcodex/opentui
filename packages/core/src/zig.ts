@@ -1,7 +1,15 @@
 import { dlopen, toArrayBuffer, JSCallback, ptr, type Pointer } from "bun:ffi"
 import { existsSync } from "fs"
 import { EventEmitter } from "events"
-import { type CursorStyle, type CursorStyleOptions, type DebugOverlayCorner, type WidthMethod, type Highlight, type LineInfo, type MousePointerStyle } from "./types"
+import {
+  type CursorStyle,
+  type CursorStyleOptions,
+  type DebugOverlayCorner,
+  type WidthMethod,
+  type Highlight,
+  type LineInfo,
+  type MousePointerStyle,
+} from "./types"
 export type { LineInfo }
 
 import { RGBA } from "./lib/RGBA"

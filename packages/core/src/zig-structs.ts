@@ -110,7 +110,6 @@ export const CursorStateStruct = defineStruct([
   ["a", "f32"],
 ])
 
-
 export const CursorStyleOptionsStruct = defineStruct([
   ["style", "u8", { default: 255 }],
   ["blinking", "u8", { default: 255 }],
