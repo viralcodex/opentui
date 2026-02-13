@@ -1,8 +1,8 @@
 import { ANSI } from "./ansi"
 import { Renderable, RootRenderable } from "./Renderable"
 import {
-  type CursorStyle,
   DebugOverlayCorner,
+  type CursorStyleOptions,
   type MousePointerStyle,
   type RenderContext,
   type ThemeMode,
@@ -1276,8 +1276,6 @@ export class CliRenderer extends EventEmitter implements RenderContext {
           })
           maybeRenderable.processMouseEvent(event)
         }
-
-        this.updateMousePointerOnHover(maybeRenderable)
       }
 
       if (this.capturedRenderable && mouseEvent.type !== "up") {
@@ -1373,29 +1371,15 @@ export class CliRenderer extends EventEmitter implements RenderContext {
       })
       hitRenderable.processMouseEvent(event)
     }
-
-    this.updateMousePointerOnHover(hitRenderable)
   }
-
-  private updateMousePointerOnHover(renderable: Renderable | undefined): void {
-    const cursorStyle = renderable?.getCurrentHoverCursorStyle()
-    if (cursorStyle) {
-      this.setMousePointer(cursorStyle)
-    } else {
-      this.resetMousePointer()
-    }
-  }
-
-  public setMousePointer(shape: MousePointerStyle): void {
-    if (this._currentMousePointerStyle === shape) return
-    this._currentMousePointerStyle = shape
-    this.writeOut(ANSI.setMousePointer(shape))
+  public setMousePointer(style: MousePointerStyle): void {
+    this._currentMousePointerStyle = style
+    this.lib.setCursorStyleOptions(this.rendererPtr, { cursor: style })
   }
 
   public resetMousePointer(): void {
-    if (this._currentMousePointerStyle === undefined) return
     this._currentMousePointerStyle = undefined
-    this.writeOut(ANSI.resetMousePointer)
+    this.lib.setCursorStyleOptions(this.rendererPtr, { cursor: "default" })
   }
 
   public hitTest(x: number, y: number): number {
@@ -1576,16 +1560,11 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     lib.setCursorPosition(renderer.rendererPtr, x, y, visible)
   }
 
-  public static setCursorStyle(
-    renderer: CliRenderer,
-    style: CursorStyle,
-    blinking: boolean = false,
-    color?: RGBA,
-  ): void {
+  public static setCursorStyle(renderer: CliRenderer, options: CursorStyleOptions): void {
     const lib = resolveRenderLib()
-    lib.setCursorStyle(renderer.rendererPtr, style, blinking)
-    if (color) {
-      lib.setCursorColor(renderer.rendererPtr, color)
+    lib.setCursorStyleOptions(renderer.rendererPtr, options)
+    if (options.cursor !== undefined) {
+      renderer._currentMousePointerStyle = options.cursor
     }
   }
 
@@ -1598,10 +1577,10 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this.lib.setCursorPosition(this.rendererPtr, x, y, visible)
   }
 
-  public setCursorStyle(style: CursorStyle, blinking: boolean = false, color?: RGBA): void {
-    this.lib.setCursorStyle(this.rendererPtr, style, blinking)
-    if (color) {
-      this.lib.setCursorColor(this.rendererPtr, color)
+  public setCursorStyle(options: CursorStyleOptions): void {
+    this.lib.setCursorStyleOptions(this.rendererPtr, options)
+    if (options.cursor !== undefined) {
+      this._currentMousePointerStyle = options.cursor
     }
   }
 

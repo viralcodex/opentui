@@ -64,6 +64,10 @@ pub const ANSI = struct {
     pub const saveCursorState = "\x1b[s";
     pub const restoreCursorState = "\x1b[u";
 
+    pub fn setMousePointerOutput(writer: anytype, shape: []const u8) AnsiError!void {
+        writer.print("\x1b]22;{s}\x07", .{ shape }) catch return AnsiError.WriteFailed;
+    }
+
     pub const switchToAlternateScreen = "\x1b[?1049h";
     pub const switchToMainScreen = "\x1b[?1049l";
 

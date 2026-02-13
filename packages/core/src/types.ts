@@ -32,12 +32,14 @@ export type ThemeMode = "dark" | "light"
 
 export type CursorStyle = "block" | "line" | "underline"
 
-export interface CursorStyleOptions {
-  style: CursorStyle
-  blinking: boolean
-}
-
 export type MousePointerStyle = "default" | "pointer" | "text" | "crosshair" | "move" | "not-allowed"
+
+export interface CursorStyleOptions {
+  style?: CursorStyle
+  blinking?: boolean
+  color?: RGBA,
+  cursor?: MousePointerStyle
+}
 
 export enum DebugOverlayCorner {
   topLeft = 0,
@@ -66,8 +68,10 @@ export interface RenderContext extends EventEmitter {
   height: number
   requestRender: () => void
   setCursorPosition: (x: number, y: number, visible: boolean) => void
-  setCursorStyle: (style: CursorStyle, blinking: boolean) => void
+  setCursorStyle: (options: CursorStyleOptions) => void
   setCursorColor: (color: RGBA) => void
+  setMousePointer: (shape: MousePointerStyle) => void
+  resetMousePointer: () => void
   widthMethod: WidthMethod
   capabilities: any | null
   requestLive: () => void

@@ -9,9 +9,6 @@ export const ANSI = {
   moveCursor: (row: number, col: number) => `\x1b[${row};${col}H`,
   moveCursorAndClear: (row: number, col: number) => `\x1b[${row};${col}H\x1b[J`,
 
-  setMousePointer: (shape: string) => `\x1b]22;${shape}\x07`,
-  resetMousePointer: "\x1b]22;\x07",
-
   setRgbBackground: (r: number, g: number, b: number) => `\x1b[48;2;${r};${g};${b}m`,
   resetBackground: "\x1b[49m",
 
