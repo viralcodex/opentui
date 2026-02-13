@@ -143,6 +143,7 @@ pub fn resetState(self: *Terminal, tty: anytype) !void {
     try tty.writeAll(ansi.ANSI.showCursor);
     try tty.writeAll(ansi.ANSI.reset);
     try tty.writeAll(ansi.ANSI.resetMousePointer);
+    self.state.mouse_pointer = .default;
 
     if (self.state.kitty_keyboard) {
         try self.setKittyKeyboard(tty, false, 0);

@@ -71,7 +71,6 @@ export interface RenderContext extends EventEmitter {
   setCursorStyle: (options: CursorStyleOptions) => void
   setCursorColor: (color: RGBA) => void
   setMousePointer: (shape: MousePointerStyle) => void
-  resetMousePointer: () => void
   widthMethod: WidthMethod
   capabilities: any | null
   requestLive: () => void

@@ -1377,11 +1377,6 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     this.lib.setCursorStyleOptions(this.rendererPtr, { cursor: style })
   }
 
-  public resetMousePointer(): void {
-    this._currentMousePointerStyle = undefined
-    this.lib.setCursorStyleOptions(this.rendererPtr, { cursor: "default" })
-  }
-
   public hitTest(x: number, y: number): number {
     return this.lib.checkHit(this.rendererPtr, x, y)
   }
@@ -1762,8 +1757,6 @@ export class CliRenderer extends EventEmitter implements RenderContext {
     if (this._destroyFinalized) return
     this._destroyFinalized = true
     this._destroyPending = false
-
-    this.resetMousePointer()
 
     process.removeListener("SIGWINCH", this.sigwinchHandler)
     process.removeListener("uncaughtException", this.handleError)
