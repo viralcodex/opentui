@@ -21,10 +21,10 @@ describe("mouse pointer style", () => {
     expect((renderer as any)._currentMousePointerStyle).toBe("pointer")
   })
 
-  test("resetMousePointer clears style", async () => {
+  test("setMousePointer with 'default' clears style", async () => {
     renderer.setMousePointer("pointer")
-    renderer.resetMousePointer()
-    expect((renderer as any)._currentMousePointerStyle).toBeUndefined()
+    renderer.setMousePointer("default")
+    expect((renderer as any)._currentMousePointerStyle).toBe("default")
   })
 
   test("setMousePointer supports all style types", async () => {
@@ -70,7 +70,7 @@ describe("mouse pointer style", () => {
         this.ctx.setMousePointer("pointer")
       },
       onMouseOut() {
-        this.ctx.resetMousePointer()
+        this.ctx.setMousePointer("default")
         pointerReset = true
       },
     })
@@ -87,7 +87,7 @@ describe("mouse pointer style", () => {
     await renderOnce()
 
     expect(pointerReset).toBe(true)
-    expect((renderer as any)._currentMousePointerStyle).toBeUndefined()
+    expect((renderer as any)._currentMousePointerStyle).toBe("default")
   })
 
   test("pointer resets on renderer destroy", async () => {
