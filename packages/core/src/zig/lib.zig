@@ -238,13 +238,13 @@ pub const CursorStyleOptions = extern struct {
 };
 
 export fn setCursorStyleOptions(rendererPtr: *renderer.CliRenderer, options: *const CursorStyleOptions) void {
-    if (options.style <= 2) {
-        const style: terminal.CursorStyle = @enumFromInt(options.style);
-        const blinking = options.blinking == 1;
+    const current = rendererPtr.terminal.getCursorStyle();
+
+    const style = if (options.style <= 2) @as(terminal.CursorStyle, @enumFromInt(options.style)) else current.style;
+    const blinking = if (options.blinking <= 1) options.blinking == 1 else current.blinking;
+
+    if (options.style <= 2 or options.blinking <= 1) {
         rendererPtr.terminal.setCursorStyle(style, blinking);
-    } else if (options.blinking <= 1) {
-        const current = rendererPtr.terminal.getCursorStyle();
-        rendererPtr.terminal.setCursorStyle(current.style, options.blinking == 1);
     }
     if (options.color) |rgba| {
         rendererPtr.terminal.setCursorColor(utils.f32PtrToRGBA(rgba));
