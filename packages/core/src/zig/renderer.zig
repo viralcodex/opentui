@@ -260,6 +260,8 @@ pub const CliRenderer = struct {
             .hitScissorStack = hitScissorStack,
         };
 
+        nextBuffer.setBlendBackdropColor(.{ self.backgroundColor[0], self.backgroundColor[1], self.backgroundColor[2], 1.0 });
+
         try currentBuffer.clear(.{ self.backgroundColor[0], self.backgroundColor[1], self.backgroundColor[2], self.backgroundColor[3] }, CLEAR_CHAR);
         try nextBuffer.clear(.{ self.backgroundColor[0], self.backgroundColor[1], self.backgroundColor[2], self.backgroundColor[3] }, null);
 
@@ -464,6 +466,7 @@ pub const CliRenderer = struct {
 
         try self.currentRenderBuffer.resize(width, height);
         try self.nextRenderBuffer.resize(width, height);
+        self.nextRenderBuffer.setBlendBackdropColor(.{ self.backgroundColor[0], self.backgroundColor[1], self.backgroundColor[2], 1.0 });
 
         try self.currentRenderBuffer.clear(.{ 0.0, 0.0, 0.0, 1.0 }, CLEAR_CHAR);
         try self.nextRenderBuffer.clear(.{ self.backgroundColor[0], self.backgroundColor[1], self.backgroundColor[2], self.backgroundColor[3] }, null);
@@ -481,9 +484,14 @@ pub const CliRenderer = struct {
             self.allocator.free(self.nextHitGrid);
             self.currentHitGrid = newCurrentHitGrid;
             self.nextHitGrid = newNextHitGrid;
-            self.hitGridWidth = width;
-            self.hitGridHeight = height;
         }
+
+        // Always update dimensions. The backing buffer is at least as large as
+        // width*height, so this is safe even when the terminal shrinks. Without
+        // this, checkHit keeps using stale dimensions after a shrink and returns
+        // 0 for any coordinate beyond the old bounds.
+        self.hitGridWidth = width;
+        self.hitGridHeight = height;
 
         const cursor = self.terminal.getCursorPosition();
         self.terminal.setCursorPosition(@min(cursor.x, width), @min(cursor.y, height), cursor.visible);
@@ -491,6 +499,7 @@ pub const CliRenderer = struct {
 
     pub fn setBackgroundColor(self: *CliRenderer, rgba: RGBA) void {
         self.backgroundColor = rgba;
+        self.nextRenderBuffer.setBlendBackdropColor(.{ rgba[0], rgba[1], rgba[2], 1.0 });
     }
 
     pub fn setRenderOffset(self: *CliRenderer, offset: u32) void {

@@ -1,11 +1,12 @@
 import { test, expect, beforeEach, afterEach, describe } from "bun:test"
-import { nonAlphanumericKeys, type KeyEventType, type ParsedKey } from "../lib/parse.keypress"
-import { type KeyEvent } from "../lib/KeyHandler"
+import { decodePasteBytes } from "../lib/paste.js"
+import { nonAlphanumericKeys, type KeyEventType, type ParsedKey } from "../lib/parse.keypress.js"
+import { type KeyEvent } from "../lib/KeyHandler.js"
 import { Buffer } from "node:buffer"
-import { Renderable, type RenderableOptions } from "../Renderable"
-import { createTestRenderer, type TestRenderer, type TestRendererOptions } from "../testing/test-renderer"
-import { ManualClock } from "../testing/manual-clock"
-import type { RenderContext } from "../types"
+import { Renderable, type RenderableOptions } from "../Renderable.js"
+import { createTestRenderer, type TestRenderer, type TestRendererOptions } from "../testing/test-renderer.js"
+import { ManualClock } from "../testing/manual-clock.js"
+import type { RenderContext } from "../types.js"
 
 let currentRenderer: TestRenderer
 let kittyRenderer: TestRenderer
@@ -17,8 +18,8 @@ let kittyClock: ManualClock
 beforeEach(async () => {
   currentClock = new ManualClock()
   kittyClock = new ManualClock()
-  ;({ renderer: currentRenderer } = await createTestRenderer({ stdinParserClock: currentClock }))
-  ;({ renderer: kittyRenderer } = await createTestRenderer({ kittyKeyboard: true, stdinParserClock: kittyClock }))
+  ;({ renderer: currentRenderer } = await createTestRenderer({ clock: currentClock }))
+  ;({ renderer: kittyRenderer } = await createTestRenderer({ kittyKeyboard: true, clock: kittyClock }))
 
   // Mock native capability functions to avoid interfering with the test terminal
   // @ts-expect-error - mocking for test
@@ -111,7 +112,7 @@ async function createRoutingRenderer(options: Partial<TestRendererOptions> = {})
     width: 40,
     height: 20,
     useMouse: true,
-    stdinParserClock: clock,
+    clock,
     ...options,
   })
 
@@ -1497,25 +1498,64 @@ test("capability response followed by keypress", async () => {
   expect(keypresses[0].name).toBe("a")
 })
 
-test("partial SGR mouse flushed on timeout should not trigger keypress", async () => {
+test("partial SGR mouse stays pending on timeout, completes when rest arrives", async () => {
   const keypresses: KeyEvent[] = []
   currentRenderer.keyInput.on("keypress", (event) => {
     keypresses.push(event)
   })
 
-  // Incomplete SGR mouse sequence; the native parser flushes this token on timeout.
+  // Incomplete SGR mouse sequence; stays pending (not flushed on timeout).
   currentRenderer.stdin.emit("data", Buffer.from("\x1b[<35;20"))
 
   // Wait past native stdin parser timeout (10ms)
   advanceCurrentClock()
   expect(keypresses).toHaveLength(0)
 
-  // Ensure normal key input still works after the filtered flush
+  // Completing the mouse sequence should not trigger keypress either
+  currentRenderer.stdin.emit("data", Buffer.from(";5m"))
+  advanceCurrentClock()
+  expect(keypresses).toHaveLength(0)
+
+  // Normal key input still works after
   currentRenderer.stdin.emit("data", Buffer.from("x"))
   advanceCurrentClock()
 
   expect(keypresses).toHaveLength(1)
   expect(keypresses[0].name).toBe("x")
+})
+
+test("partial OSC flushed on timeout should not block later text", async () => {
+  const keypresses: KeyEvent[] = []
+  currentRenderer.keyInput.on("keypress", (event) => {
+    keypresses.push(event)
+  })
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b]52;c;"))
+  advanceCurrentClock()
+  expect(keypresses).toHaveLength(0)
+
+  currentRenderer.stdin.emit("data", Buffer.from("abc"))
+  advanceCurrentClock()
+
+  expect(keypresses).toHaveLength(3)
+  expect(keypresses.map((event) => event.name)).toEqual(["a", "b", "c"])
+})
+
+test("partial OSC flushed on timeout should not block later escape sequences", async () => {
+  const keypresses: KeyEvent[] = []
+  currentRenderer.keyInput.on("keypress", (event) => {
+    keypresses.push(event)
+  })
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b]52;c;"))
+  advanceCurrentClock()
+  expect(keypresses).toHaveLength(0)
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b[A"))
+  advanceCurrentClock()
+
+  expect(keypresses).toHaveLength(1)
+  expect(keypresses[0].name).toBe("up")
 })
 
 test("incomplete mouse input resets the timeout when more bytes arrive", async () => {
@@ -1713,6 +1753,60 @@ test("delayed capability responses should be processed", async () => {
   // Should have user input but not capability
   expect(keypresses).toHaveLength(3)
   expect(keypresses.map((k) => k.name)).toEqual(["a", "b", "c"])
+})
+
+test("delayed explicit-width CPR stays in response path while setup probe is active", async () => {
+  const keypresses: KeyEvent[] = []
+  currentRenderer.keyInput.on("keypress", (event) => {
+    keypresses.push(event)
+  })
+
+  // @ts-expect-error - accessing private helper for test coverage
+  currentRenderer.updateStdinParserProtocolContext({ explicitWidthCprActive: true })
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b[1;2"))
+  advanceCurrentClock()
+  currentRenderer.stdin.emit("data", Buffer.from("R"))
+  advanceCurrentClock()
+
+  expect(keypresses).toHaveLength(0)
+})
+
+test("delayed DECRPM stays in response path while capability probing is active", async () => {
+  const keypresses: KeyEvent[] = []
+  currentRenderer.keyInput.on("keypress", (event) => {
+    keypresses.push(event)
+  })
+
+  // @ts-expect-error - accessing private helper for test coverage
+  currentRenderer.updateStdinParserProtocolContext({ privateCapabilityRepliesActive: true })
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b[?1016;2$"))
+  advanceCurrentClock()
+  currentRenderer.stdin.emit("data", Buffer.from("y"))
+  advanceCurrentClock()
+
+  expect(keypresses).toHaveLength(0)
+})
+
+test("delayed pixel resolution response stays in response path while query is active", async () => {
+  const keypresses: KeyEvent[] = []
+  currentRenderer.keyInput.on("keypress", (event) => {
+    keypresses.push(event)
+  })
+
+  // @ts-expect-error - accessing private property for testing
+  currentRenderer.waitingForPixelResolution = true
+  // @ts-expect-error - accessing private helper for test coverage
+  currentRenderer.updateStdinParserProtocolContext({ pixelResolutionQueryActive: true })
+
+  currentRenderer.stdin.emit("data", Buffer.from("\x1b[4;1080;192"))
+  advanceCurrentClock()
+  currentRenderer.stdin.emit("data", Buffer.from("0t"))
+  advanceCurrentClock()
+
+  expect(keypresses).toHaveLength(0)
+  expect(currentRenderer.resolution).toEqual({ width: 1920, height: 1080 })
 })
 
 test("vscode minimal capability response", async () => {
@@ -2033,7 +2127,7 @@ describe("stdin routing", () => {
         keys.push(event.name)
       })
       renderer.keyInput.on("paste", (event) => {
-        pastes.push(event.text)
+        pastes.push(decodePasteBytes(event.bytes))
       })
 
       const largeChunk = Buffer.alloc(16 * 1024, "x")
@@ -2071,7 +2165,7 @@ describe("stdin routing", () => {
 
       renderer.keyInput.on("paste", (event) => {
         pasteCount += 1
-        pastedBytes += event.text.length
+        pastedBytes += event.bytes.length
       })
 
       const chunk = Buffer.alloc(payloadSize, "x")
@@ -2093,7 +2187,7 @@ describe("stdin routing", () => {
       const payload = "x".repeat(70_000)
       const pastes: string[] = []
       renderer.keyInput.on("paste", (event) => {
-        pastes.push(event.text)
+        pastes.push(decodePasteBytes(event.bytes))
       })
 
       renderer.stdin.emit("data", Buffer.from(`\x1b[200~${payload}\x1b[201~`))
@@ -2111,7 +2205,7 @@ describe("stdin routing", () => {
     try {
       const pastes: string[] = []
       renderer.keyInput.on("paste", (event) => {
-        pastes.push(event.text)
+        pastes.push(decodePasteBytes(event.bytes))
       })
 
       renderer.stdin.emit("data", Buffer.from("\x1b[200~\x1b[201~"))
@@ -2130,7 +2224,7 @@ describe("stdin routing", () => {
       const payload = "a".repeat(4095) + "é"
       const pastes: string[] = []
       renderer.keyInput.on("paste", (event) => {
-        pastes.push(event.text)
+        pastes.push(decodePasteBytes(event.bytes))
       })
 
       renderer.stdin.emit("data", Buffer.from(`\x1b[200~${payload}\x1b[201~`))

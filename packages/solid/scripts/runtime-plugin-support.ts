@@ -9,9 +9,9 @@ import {
 import * as solidJsRuntime from "solid-js"
 import * as solidJsStoreRuntime from "solid-js/store"
 import * as solidRuntime from "../index"
-import { createSolidTransformPlugin } from "./solid-plugin"
+import { ensureSolidTransformPlugin } from "./solid-plugin"
 
-const runtimePluginSupportInstalledKey = "__opentuiSolidRuntimePluginSupportInstalled__"
+const runtimePluginSupportInstalledKey = Symbol.for("opentui.solid.runtime-plugin-support")
 
 type RuntimePluginSupportState = typeof globalThis & {
   [runtimePluginSupportInstalledKey]?: boolean
@@ -38,14 +38,12 @@ export function ensureRuntimePluginSupport(): boolean {
     return false
   }
 
-  registerBunPlugin(
-    createSolidTransformPlugin({
-      moduleName: runtimeModuleIdForSpecifier("@opentui/solid"),
-      resolvePath(specifier) {
-        return resolveRuntimeSpecifier(specifier)
-      },
-    }),
-  )
+  ensureSolidTransformPlugin({
+    moduleName: runtimeModuleIdForSpecifier("@opentui/solid"),
+    resolvePath(specifier) {
+      return resolveRuntimeSpecifier(specifier)
+    },
+  })
 
   registerBunPlugin(
     createRuntimePlugin({

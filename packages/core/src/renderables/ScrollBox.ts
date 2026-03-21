@@ -1,12 +1,12 @@
-import { type KeyEvent } from "../lib"
-import { getObjectsInViewport } from "../lib/objects-in-viewport"
-import { LinearScrollAccel, MacOSScrollAccel, type ScrollAcceleration } from "../lib/scroll-acceleration"
-import type { Renderable, RenderableOptions } from "../Renderable"
-import type { MouseEvent } from "../renderer"
-import type { RenderContext } from "../types"
-import { BoxRenderable, type BoxOptions } from "./Box"
-import type { VNode } from "./composition/vnode"
-import { ScrollBarRenderable, type ScrollBarOptions, type ScrollUnit } from "./ScrollBar"
+import { type KeyEvent } from "../lib/index.js"
+import { getObjectsInViewport } from "../lib/objects-in-viewport.js"
+import { LinearScrollAccel, MacOSScrollAccel, type ScrollAcceleration } from "../lib/scroll-acceleration.js"
+import type { Renderable, RenderableOptions } from "../Renderable.js"
+import type { MouseEvent } from "../renderer.js"
+import type { RenderContext } from "../types.js"
+import { BoxRenderable, type BoxOptions } from "./Box.js"
+import type { VNode } from "./composition/vnode.js"
+import { ScrollBarRenderable, type ScrollBarOptions, type ScrollUnit } from "./ScrollBar.js"
 
 class ContentRenderable extends BoxRenderable {
   private viewport: BoxRenderable
@@ -423,6 +423,55 @@ export class ScrollBoxRenderable extends BoxRenderable {
     }
     // Note: scrollBy doesn't need to set _hasManualScroll here because the scrollbar
     // change will trigger the scrollTop setter which handles it
+  }
+
+  public scrollChildIntoView(childId: string): void {
+    const child = this.content.findDescendantById(childId)
+    if (!child) return
+
+    const getNearestDelta = (
+      elementStart: number,
+      elementEnd: number,
+      viewportStart: number,
+      viewportEnd: number,
+    ): number => {
+      const elementSize = elementEnd - elementStart
+      const viewportSize = viewportEnd - viewportStart
+      const elementStartOutside = elementStart < viewportStart
+      const elementEndOutside = elementEnd > viewportEnd
+
+      if (elementStartOutside && elementEndOutside) {
+        return 0
+      }
+
+      if ((elementStartOutside && elementSize < viewportSize) || (elementEndOutside && elementSize > viewportSize)) {
+        return elementStart - viewportStart
+      }
+
+      if ((elementStartOutside && elementSize > viewportSize) || (elementEndOutside && elementSize < viewportSize)) {
+        return elementEnd - viewportEnd
+      }
+
+      return 0
+    }
+
+    const childTop = child.y
+    const childBottom = child.y + child.height
+    const viewportTop = this.viewport.y
+    const viewportBottom = this.viewport.y + this.viewport.height
+
+    const dy = getNearestDelta(childTop, childBottom, viewportTop, viewportBottom)
+
+    const childLeft = child.x
+    const childRight = child.x + child.width
+    const viewportLeft = this.viewport.x
+    const viewportRight = this.viewport.x + this.viewport.width
+
+    const dx = getNearestDelta(childLeft, childRight, viewportLeft, viewportRight)
+
+    if (dx !== 0 || dy !== 0) {
+      this.scrollBy({ x: dx, y: dy })
+    }
   }
 
   public scrollTo(position: number | { x: number; y: number }): void {

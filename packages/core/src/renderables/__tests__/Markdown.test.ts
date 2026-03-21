@@ -1,11 +1,11 @@
 import { test, expect, beforeAll, beforeEach, afterEach, afterAll } from "bun:test"
-import { MarkdownRenderable, type MarkdownOptions } from "../Markdown"
-import { CodeRenderable } from "../Code"
-import { TextRenderable } from "../Text"
-import { TextTableRenderable } from "../TextTable"
-import { SyntaxStyle } from "../../syntax-style"
-import { RGBA } from "../../lib/RGBA"
-import { TreeSitterClient } from "../../lib/tree-sitter"
+import { MarkdownRenderable, type MarkdownOptions } from "../Markdown.js"
+import { CodeRenderable } from "../Code.js"
+import { TextRenderable } from "../Text.js"
+import { TextTableRenderable } from "../TextTable.js"
+import { SyntaxStyle } from "../../syntax-style.js"
+import { RGBA } from "../../lib/RGBA.js"
+import { TreeSitterClient } from "../../lib/tree-sitter/index.js"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { mkdir } from "node:fs/promises"
@@ -15,8 +15,8 @@ import {
   type TestRenderer,
   MockTreeSitterClient,
   TestRecorder,
-} from "../../testing"
-import { TextAttributes, type CapturedFrame } from "../../types"
+} from "../../testing.js"
+import { TextAttributes, type CapturedFrame } from "../../types.js"
 
 let renderer: TestRenderer
 let mockMouse: MockMouse
@@ -101,6 +101,15 @@ async function renderMarkdown(markdown: string, conceal: boolean = true): Promis
     .split("\n")
     .map((line) => line.trimEnd())
   return "\n" + lines.join("\n").trimEnd()
+}
+
+function findSpanContaining(frame: CapturedFrame, text: string) {
+  for (const line of frame.lines) {
+    const span = line.spans.find((candidate) => candidate.text.includes(text))
+    if (span) return span
+  }
+
+  return undefined
 }
 
 test("basic table alignment", async () => {
@@ -2168,14 +2177,6 @@ The table alignment uses:
 
   renderer.root.add(md)
   await renderMarkdownRenderable(md)
-
-  const findSpanContaining = (frame: CapturedFrame, text: string) => {
-    for (const line of frame.lines) {
-      const span = line.spans.find((candidate) => candidate.text.includes(text))
-      if (span) return span
-    }
-    return undefined
-  }
 
   const frame1 = captureSpans()
   const headingSpan1 = findSpanContaining(frame1, "OpenTUI Markdown Demo")

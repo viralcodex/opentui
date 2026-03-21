@@ -1,6 +1,6 @@
 // Copied from https://github.com/enquirer/enquirer/blob/36785f3399a41cd61e9d28d1eb9c2fcd73d69b4c/lib/keypress.js
 import { Buffer } from "node:buffer"
-import { parseKittyKeyboard } from "./parse.keypress-kitty"
+import { parseKittyKeyboard } from "./parse.keypress-kitty.js"
 
 const metaKeyCodeRe = /^(?:\x1b)([a-zA-Z0-9])$/
 
@@ -32,6 +32,8 @@ const keyName: Record<string, string> = {
   "[21~": "f10",
   "[23~": "f11",
   "[24~": "f12",
+  "[29~": "menu",
+  "[57427~": "clear",
   /* xterm ESC [ letter */
   "[A": "up",
   "[B": "down",
@@ -40,6 +42,9 @@ const keyName: Record<string, string> = {
   "[E": "clear",
   "[F": "end",
   "[H": "home",
+  "[P": "f1",
+  "[Q": "f2",
+  "[S": "f4",
   /* xterm/gnome ESC O letter */
   OA: "up",
   OB: "down",

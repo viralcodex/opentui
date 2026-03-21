@@ -1,12 +1,12 @@
-import { type RenderContext } from "../types"
-import { StyledText } from "../lib/styled-text"
-import { SyntaxStyle } from "../syntax-style"
-import { getTreeSitterClient, treeSitterToStyledText, TreeSitterClient } from "../lib/tree-sitter"
-import { TextBufferRenderable, type TextBufferOptions } from "./TextBufferRenderable"
-import type { OptimizedBuffer } from "../buffer"
-import type { SimpleHighlight } from "../lib/tree-sitter/types"
-import type { TextChunk } from "../text-buffer"
-import { treeSitterToTextChunks } from "../lib/tree-sitter-styled-text"
+import { type RenderContext } from "../types.js"
+import { StyledText } from "../lib/styled-text.js"
+import { SyntaxStyle } from "../syntax-style.js"
+import { getTreeSitterClient, treeSitterToStyledText, TreeSitterClient } from "../lib/tree-sitter/index.js"
+import { TextBufferRenderable, type TextBufferOptions } from "./TextBufferRenderable.js"
+import type { OptimizedBuffer } from "../buffer.js"
+import type { SimpleHighlight } from "../lib/tree-sitter/types.js"
+import type { TextChunk } from "../text-buffer.js"
+import { treeSitterToTextChunks } from "../lib/tree-sitter-styled-text.js"
 
 export interface HighlightContext {
   content: string
@@ -56,6 +56,7 @@ export class CodeRenderable extends TextBufferRenderable {
   private _lastHighlights: SimpleHighlight[] = []
   private _onHighlight?: OnHighlightCallback
   private _onChunks?: OnChunksCallback
+  private _highlightingPromise: Promise<void> = Promise.resolve()
 
   protected _contentDefaultOptions = {
     content: "",
@@ -197,6 +198,10 @@ export class CodeRenderable extends TextBufferRenderable {
 
   get isHighlighting(): boolean {
     return this._isHighlighting
+  }
+
+  get highlightingDone(): Promise<void> {
+    return this._highlightingPromise
   }
 
   protected async transformChunks(chunks: TextChunk[], context: ChunkRenderContext): Promise<TextChunk[]> {
@@ -342,7 +347,7 @@ export class CodeRenderable extends TextBufferRenderable {
       } else {
         this.ensureVisibleTextBeforeHighlight()
         this._highlightsDirty = false
-        this.startHighlight()
+        this._highlightingPromise = this.startHighlight()
       }
     }
 

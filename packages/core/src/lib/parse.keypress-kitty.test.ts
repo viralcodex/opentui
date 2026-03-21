@@ -1,5 +1,5 @@
 import { test, expect } from "bun:test"
-import { parseKeypress, type ParseKeypressOptions } from "./parse.keypress"
+import { parseKeypress, type ParseKeypressOptions } from "./parse.keypress.js"
 
 test("parseKeypress - Kitty keyboard protocol disabled by default", () => {
   // Kitty sequences should fall back to regular parsing when disabled
@@ -184,6 +184,23 @@ test("parseKeypress - Kitty keyboard caps lock", () => {
   const result = parseKeypress("\x1b[97;65u", options)! // modifier 65 - 1 = 64 = caps lock
   expect(result.name).toBe("a")
   expect(result.capsLock).toBe(true)
+})
+
+test("parseKeypress - Kitty keyboard lock keys", () => {
+  const options: ParseKeypressOptions = { useKittyKeyboard: true }
+
+  const cases = [
+    ["\x1b[57358u", "capslock", "[57358u"],
+    ["\x1b[57359u", "scrolllock", "[57359u"],
+    ["\x1b[57360u", "numlock", "[57360u"],
+  ] as const
+
+  for (const [sequence, name, code] of cases) {
+    const result = parseKeypress(sequence, options)!
+    expect(result.name).toBe(name)
+    expect(result.code).toBe(code)
+    expect(result.source).toBe("kitty")
+  }
 })
 
 test("parseKeypress - Kitty keyboard num lock", () => {
