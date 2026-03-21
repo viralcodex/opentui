@@ -167,8 +167,8 @@ export class SelectRenderable extends Renderable {
 
     const bgColor = this._focused ? this._focusedBackgroundColor : this._backgroundColor
     this.frameBuffer.clear(bgColor)
-    if(this._options.length === 0) return
-    
+    if (this._options.length === 0) return
+
     const contentX = 0
     const contentY = 0
     const contentWidth = this.width

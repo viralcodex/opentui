@@ -62,9 +62,12 @@ async function createSelectRenderable(
 }
 
 beforeEach(async () => {
-  ;({ renderer: currentRenderer, mockInput: currentMockInput, renderOnce, captureCharFrame } = await createTestRenderer(
-    {},
-  ))
+  ;({
+    renderer: currentRenderer,
+    mockInput: currentMockInput,
+    renderOnce,
+    captureCharFrame,
+  } = await createTestRenderer({}))
 })
 
 afterEach(() => {
