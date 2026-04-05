@@ -178,6 +178,13 @@ pub const OptimizedBuffer = struct {
         link_pool: ?*link.LinkPool = null,
     };
 
+    const BoxTitleLayout = struct {
+        shouldDraw: bool = false,
+        x: i32 = 0,
+        startX: i32 = 0,
+        endX: i32 = 0,
+    };
+
     pub fn init(allocator: Allocator, width: u32, height: u32, options: InitOptions) BufferError!*OptimizedBuffer {
         if (width == 0 or height == 0) {
             logger.warn("OptimizedBuffer.init: Invalid dimensions {}x{}", .{ width, height });
@@ -1824,13 +1831,6 @@ pub const OptimizedBuffer = struct {
         }
     }
 
-    const BoxTitleLayout = struct {
-        shouldDraw: bool = false,
-        x: i32 = 0,
-        startX: i32 = 0,
-        endX: i32 = 0,
-    };
-
     fn computeBoxTitleLayout(
         self: *OptimizedBuffer,
         titleText: ?[]const u8,
@@ -1850,7 +1850,7 @@ pub const OptimizedBuffer = struct {
         const is_ascii = utf8.isAsciiOnly(text);
         const titleLength = @as(i32, @intCast(utf8.calculateTextWidth(text, 2, is_ascii, self.width_method)));
         const minTitleSpace = 4;
-        
+
         if (@as(i32, @intCast(width)) < titleLength + minTitleSpace) {
             return .{ .x = startX };
         }
