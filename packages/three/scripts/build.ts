@@ -50,13 +50,14 @@ rmSync(distDir, { recursive: true, force: true })
 mkdirSync(distDir, { recursive: true })
 
 const externalDeps: string[] = [
+  packageJson.name,
   ...Object.keys(packageJson.dependencies || {}),
   ...Object.keys(packageJson.optionalDependencies || {}),
   ...Object.keys(packageJson.peerDependencies || {}),
 ]
 
 const buildResult = await Bun.build({
-  entrypoints: [join(rootDir, packageJson.module)],
+  entrypoints: [join(rootDir, packageJson.module), join(rootDir, "src/runtime-modules.ts")],
   target: "bun",
   format: "esm",
   outdir: distDir,
@@ -103,6 +104,11 @@ const exports = {
     import: "./index.js",
     require: "./index.js",
     types: "./index.d.ts",
+  },
+  "./runtime-modules": {
+    import: "./runtime-modules.js",
+    require: "./runtime-modules.js",
+    types: "./runtime-modules.d.ts",
   },
 }
 

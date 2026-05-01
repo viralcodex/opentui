@@ -4,6 +4,13 @@ import path from "node:path"
 import { BoxRenderable, type KeyEvent, type Renderable } from "@opentui/core"
 import { createTestRenderer, type MockInput, type TestRenderer } from "@opentui/core/testing"
 import * as addons from "./addons/index.js"
+import {
+  formatCommandBindings,
+  formatKeySequence,
+  resolveBindingSections,
+  type BindingValue,
+  type SequenceBindingLike,
+} from "./extras/index.js"
 import { type BindingParser, type Keymap, type ReactiveMatcher } from "./index.js"
 import { createDefaultOpenTuiKeymap as getKeymap } from "./opentui.js"
 
@@ -1020,6 +1027,74 @@ const scenarios: BenchmarkScenario[] = [
     },
   },
   {
+    name: "get_command_entries_registered_command_filter",
+    description: "Repeated registered command-entry discovery for a requested command set",
+    async setup() {
+      const resources = await createScenarioResources()
+      const commands = Array.from({ length: 64 }, (_, index) => `command-${index}-0`)
+
+      for (let layerIndex = 0; layerIndex < 64; layerIndex += 1) {
+        resources.keymap.registerLayer({
+          commands: Array.from({ length: 8 }, (_, index) => ({
+            name: `command-${layerIndex}-${index}`,
+            namespace: index % 2 === 0 ? "bench" : "other",
+            title: `Command ${layerIndex}-${index}`,
+            usage: `:${layerIndex}-${index}`,
+            run() {},
+          })),
+          bindings: Array.from({ length: 8 }, (_, index) => ({
+            key: createKey(layerIndex * 8 + index),
+            cmd: `command-${layerIndex}-${index}`,
+          })),
+        })
+      }
+
+      return {
+        resources,
+        runIteration() {
+          resources.keymap.getCommandEntries({ visibility: "registered", filter: { name: commands } })
+        },
+        cleanup() {
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "get_command_bindings_registered_subset",
+    description: "Repeated registered command-binding grouping for a requested command set",
+    async setup() {
+      const resources = await createScenarioResources()
+      const commands = Array.from({ length: 64 }, (_, index) => `command-${index}-0`)
+
+      for (let layerIndex = 0; layerIndex < 64; layerIndex += 1) {
+        resources.keymap.registerLayer({
+          commands: Array.from({ length: 8 }, (_, index) => ({
+            name: `command-${layerIndex}-${index}`,
+            namespace: index % 2 === 0 ? "bench" : "other",
+            title: `Command ${layerIndex}-${index}`,
+            usage: `:${layerIndex}-${index}`,
+            run() {},
+          })),
+          bindings: Array.from({ length: 8 }, (_, index) => ({
+            key: createKey(layerIndex * 8 + index),
+            cmd: `command-${layerIndex}-${index}`,
+          })),
+        })
+      }
+
+      return {
+        resources,
+        runIteration() {
+          resources.keymap.getCommandBindings({ visibility: "registered", commands })
+        },
+        cleanup() {
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
     name: "get_command_entries_reachable_shadowed_bindings",
     description: "Repeated reachable command-entry discovery while shadowed commands share bindings by name",
     async setup() {
@@ -1061,6 +1136,301 @@ const scenarios: BenchmarkScenario[] = [
           resources.keymap.getCommandEntries()
         },
         cleanup() {
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "get_command_bindings_reachable_shadowed_subset",
+    description: "Repeated reachable command-binding grouping while shadowed commands share bindings by name",
+    async setup() {
+      const resources = await createScenarioResources()
+      const focusChain = createFocusTree(resources, 4)
+      const focusedTarget = focusChain.at(-1)
+      const commands = Array.from({ length: 64 }, (_, index) => `command-${index}`)
+      if (!focusedTarget) {
+        throw new Error("Expected focused target for reachable command-binding benchmark")
+      }
+
+      resources.keymap.registerLayer({
+        commands: Array.from({ length: 128 }, (_, index) => ({
+          name: `command-${index}`,
+          title: `Global ${index}`,
+          run() {},
+        })),
+        bindings: Array.from({ length: 128 }, (_, index) => ({
+          key: createKey(index),
+          cmd: `command-${index}`,
+        })),
+      })
+
+      resources.keymap.registerLayer({
+        target: focusedTarget,
+        commands: Array.from({ length: 64 }, (_, index) => ({
+          name: `command-${index}`,
+          title: `Local ${index}`,
+          run() {},
+        })),
+        bindings: Array.from({ length: 64 }, (_, index) => ({
+          key: createKey(index + 128),
+          cmd: `command-${index}`,
+        })),
+      })
+
+      return {
+        resources,
+        runIteration() {
+          resources.keymap.getCommandBindings({ commands })
+        },
+        cleanup() {
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "binding_sections_small_mixed",
+    description: "Repeated binding-section resolution for a small mixed app config",
+    async setup() {
+      const resources = await createScenarioResources()
+      const sections = ["app", "prompt_input", "dialog_select", "missing"] as const
+      const config = {
+        app: {
+          " command.palette.show ": "ctrl+p",
+          "app.exit": ["ctrl+c", "ctrl+d", "<leader>q"],
+          "file.save": { name: "s", ctrl: true },
+          "file.close": false,
+        },
+        prompt_input: {
+          "prompt.paste": { key: "ctrl+v", preventDefault: false, fallthrough: true },
+          "prompt.history.previous": "up",
+          "prompt.history.next": "down",
+        },
+        dialog_select: {
+          "dialog.confirm": "enter",
+          "dialog.cancel": ["escape", "ctrl+c"],
+          "dialog.ignore": [],
+        },
+      }
+      let sink = 0
+
+      return {
+        resources,
+        runIteration() {
+          const resolved = resolveBindingSections(config, { sections })
+          sink += resolved.sections.app.length
+          sink += resolved.get("app", " app.exit ")?.length ?? 0
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "binding_sections_large_mixed",
+    description: "Repeated binding-section resolution for many sections and mixed binding value shapes",
+    async setup() {
+      const resources = await createScenarioResources()
+      const config: Record<string, Record<string, BindingValue>> = Object.create(null)
+      const sections = Array.from({ length: 40 }, (_, index) => `section-${index}`)
+
+      for (let sectionIndex = 0; sectionIndex < 32; sectionIndex += 1) {
+        const section: Record<string, BindingValue> = Object.create(null)
+        config[`section-${sectionIndex}`] = section
+
+        for (let commandIndex = 0; commandIndex < 64; commandIndex += 1) {
+          const command = `command-${commandIndex}`
+          switch (commandIndex % 6) {
+            case 0:
+              section[command] = false
+              break
+            case 1:
+              section[command] = []
+              break
+            case 2:
+              section[command] = createKey(commandIndex)
+              break
+            case 3:
+              section[command] = [createKey(commandIndex), `ctrl+${createKey(commandIndex + 1)}`, "none"]
+              break
+            case 4:
+              section[command] = { key: { name: createKey(commandIndex), ctrl: true }, preventDefault: false }
+              break
+            default:
+              section[command] = "none"
+              break
+          }
+        }
+      }
+
+      let sink = 0
+
+      return {
+        resources,
+        runIteration() {
+          const resolved = resolveBindingSections(config, { sections })
+          sink += resolved.sections["section-0"]?.length ?? 0
+          sink += resolved.get("section-3", "command-4")?.length ?? 0
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "binding_sections_duplicate_normalized_commands",
+    description: "Repeated binding-section resolution with many trimmed command overrides and disables",
+    async setup() {
+      const resources = await createScenarioResources()
+      const section: Record<string, BindingValue> = Object.create(null)
+
+      for (let index = 0; index < 512; index += 1) {
+        section[` command-${index} `] = createKey(index)
+        section[`command-${index}`] = index % 4 === 0 ? false : [createKey(index + 1), { key: createKey(index + 2) }]
+      }
+
+      const config = { app: section }
+      let sink = 0
+
+      return {
+        resources,
+        runIteration() {
+          const resolved = resolveBindingSections(config)
+          sink += resolved.sections.app.length
+          sink += resolved.get("app", " command-7 ")?.length ?? 0
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "format_key_sequence_plain",
+    description: "Repeated plain key-sequence formatting without custom options",
+    async setup() {
+      const resources = await createScenarioResources()
+      const sequence = resources.keymap.parseKeySequence("gdd")
+      let sink = ""
+
+      return {
+        resources,
+        runIteration() {
+          sink = formatKeySequence(sequence)
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "format_key_sequence_token_aliases",
+    description: "Repeated key-sequence formatting with token, key, modifier, and separator options",
+    async setup() {
+      const resources = await createScenarioResources()
+      resources.keymap.registerToken({ name: "<leader>", key: { name: "space" } })
+      const sequence = [
+        ...resources.keymap.parseKeySequence("<leader>s"),
+        ...resources.keymap.parseKeySequence({ name: "return", ctrl: true, shift: true, meta: true }),
+      ]
+      const options = {
+        tokenDisplay: {
+          "<leader>": "space",
+        },
+        keyNameAliases: {
+          enter: "return",
+        },
+        modifierAliases: {
+          ctrl: "C",
+          shift: "S",
+          meta: "M",
+        },
+        separator: " then ",
+      }
+      let sink = ""
+
+      return {
+        resources,
+        runIteration() {
+          sink = formatKeySequence(sequence, options)
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "format_command_bindings_dedupe_many",
+    description: "Repeated command-binding formatting with display-based dedupe over many bindings",
+    async setup() {
+      const resources = await createScenarioResources()
+      resources.keymap.registerToken({ name: "<leader>", key: { name: "space" } })
+      const sequences = [
+        resources.keymap.parseKeySequence("ctrl+s"),
+        resources.keymap.parseKeySequence("ctrl+s"),
+        resources.keymap.parseKeySequence("<leader>s"),
+        resources.keymap.parseKeySequence("dd"),
+        resources.keymap.parseKeySequence("enter"),
+        resources.keymap.parseKeySequence("return"),
+      ]
+      const bindings: SequenceBindingLike[] = Array.from({ length: 512 }, (_, index) => ({
+        sequence: sequences[index % sequences.length] ?? sequences[0]!,
+      }))
+      let sink: string | undefined
+
+      return {
+        resources,
+        runIteration() {
+          sink = formatCommandBindings(bindings)
+        },
+        cleanup() {
+          void sink
+          resources.renderer.destroy()
+        },
+      }
+    },
+  },
+  {
+    name: "format_command_bindings_no_dedupe_many",
+    description: "Repeated command-binding formatting retaining duplicate bindings",
+    async setup() {
+      const resources = await createScenarioResources()
+      resources.keymap.registerToken({ name: "<leader>", key: { name: "space" } })
+      const sequences = [
+        resources.keymap.parseKeySequence("ctrl+s"),
+        resources.keymap.parseKeySequence("<leader>s"),
+        resources.keymap.parseKeySequence("dd"),
+        resources.keymap.parseKeySequence({ name: "return", ctrl: true, shift: true }),
+      ]
+      const bindings: SequenceBindingLike[] = Array.from({ length: 512 }, (_, index) => ({
+        sequence: sequences[index % sequences.length] ?? sequences[0]!,
+      }))
+      const options = {
+        dedupe: false,
+        bindingSeparator: " | ",
+        tokenDisplay: {
+          "<leader>": "space",
+        },
+      }
+      let sink: string | undefined
+
+      return {
+        resources,
+        runIteration() {
+          sink = formatCommandBindings(bindings, options)
+        },
+        cleanup() {
+          void sink
           resources.renderer.destroy()
         },
       }

@@ -76,7 +76,7 @@ keymap.registerLayer({
 | `target`     | Optional local target. Omit it for a global layer                                            |
 | `targetMode` | `"focus-within"` or `"focus"`. Defaults to `"focus-within"` when `target` is present         |
 | `priority`   | Higher numbers win. Within the same priority, newer layers win                               |
-| `bindings`   | `BindingInput[]` or shorthand `{ [key]: cmd }`                                               |
+| `bindings`   | `BindingInput[]`                                                                             |
 | `commands`   | Named command definitions registered with the same layer                                     |
 | extra fields | Feed layer-field compilers and binding compilation. Layer fields do not surface public attrs |
 
@@ -87,13 +87,14 @@ keymap.registerLayer({
 
 ## Bindings
 
-| Form            | Example                              | Notes                                                 |
-| --------------- | ------------------------------------ | ----------------------------------------------------- |
-| String stroke   | `"x"`, `"ctrl+x"`, `"enter"`         | Requires a registered binding parser                  |
-| String sequence | `"dd"`, `"<leader>s"`                | Concatenated multi-stroke sequence                    |
-| Object stroke   | `{ name: "return", ctrl: true }`     | Skips string parsing and normalizes directly          |
-| Shorthand map   | `{ x: "save-file", y: () => {} }`    | Expanded by `normalizeBindings()` / `registerLayer()` |
-| Release binding | `{ key: "a", event: "release", ...}` | Release bindings support a single stroke only         |
+| Form            | Example                              | Notes                                         |
+| --------------- | ------------------------------------ | --------------------------------------------- |
+| String stroke   | `"x"`, `"ctrl+x"`, `"enter"`         | Requires a registered binding parser          |
+| String sequence | `"dd"`, `"<leader>s"`                | Concatenated multi-stroke sequence            |
+| Object stroke   | `{ name: "return", ctrl: true }`     | Skips string parsing and normalizes directly  |
+| Release binding | `{ key: "a", event: "release", ...}` | Release bindings support a single stroke only |
+
+The core engine only accepts full `BindingInput[]` arrays. If you want command-to-key config sugar, use `commandBindings(map)` from `@opentui/keymap/extras` to build the array before calling `registerLayer()`.
 
 `BindingInput` reserves `key`, `cmd`, `event`, `preventDefault` and `fallthrough`. All other fields are available to binding-field compilers.
 
@@ -168,8 +169,72 @@ import { stringifyKeyStroke, stringifyKeySequence } from "@opentui/keymap"
 | -------------------------------- | ------------------------------------------------------------------------------- |
 | `runCommand(cmd, options?)`      | Runs a command against the registered command chain plus command resolvers      |
 | `dispatchCommand(cmd, options?)` | Runs a command through the active dispatch chain for the supplied/current focus |
-| `normalizeCommandName(name)`     | Trims a command name and rejects empty or whitespace-containing names           |
-| `normalizeBindings(bindings)`    | Expands shorthand bindings into `BindingInput[]`                                |
+
+Pure extra exported from `@opentui/keymap/extras`:
+
+| Helper                           | Description                                                                                            |
+| -------------------------------- | ------------------------------------------------------------------------------------------------------ |
+| `commandBindings(map)`           | Converts a command-to-key object map into `BindingInput[]`, trimming command keys before emitting them |
+| `formatKeySequence(parts, opts)` | Formats parsed key sequences with optional token, key-name and modifier aliases                        |
+| `formatCommandBindings(...)`     | Formats command binding lists, reusing `formatKeySequence()` and deduping by default                   |
+| `resolveBindingSections(config)` | Converts sectioned command config into binding arrays plus `get(section, cmd)` lookup                  |
+
+`commandBindings()` accepts optional `onWarning` and `onError` callbacks. `onWarning` reports trimmed-command overrides such as `" save-file "` and `"save-file"`; invalid key values are skipped by default, and `onError` lets callers observe them or throw if they want strict behavior.
+
+`formatKeySequence()` and `formatCommandBindings()` are stateless display helpers for parsed keymap data. They do not read runtime state or host config. Use `tokenDisplay`, `keyNameAliases` and `modifierAliases` when your app wants presentation-specific labels such as `"alt"` instead of `"meta"` or `"pgup"` instead of `"pageup"`.
+
+Example:
+
+```ts
+import { commandBindings } from "@opentui/keymap/extras"
+
+const bindings = commandBindings({
+  "  save-file  ": "ctrl+s",
+  ":write session.log": "<leader>s",
+})
+
+// => [
+//      { key: "ctrl+s", cmd: "save-file" },
+//      { key: "<leader>s", cmd: ":write session.log" },
+//    ]
+
+keymap.registerLayer({ bindings })
+```
+
+```ts
+import { formatCommandBindings, formatKeySequence } from "@opentui/keymap/extras"
+
+formatKeySequence(keymap.parseKeySequence("<leader>s"), {
+  tokenDisplay: { "<leader>": "space" },
+  modifierAliases: { meta: "alt" },
+  keyNameAliases: { pageup: "pgup", pagedown: "pgdn", delete: "del" },
+})
+
+formatCommandBindings(keymap.getCommandBindings({ visibility: "registered", commands: ["save-file"] }).get("save-file"))
+```
+
+`resolveBindingSections()` is an opinionated config-to-keymap transformation for app-level config split by real registration site. It is one practical shape; copy and adjust it if your app needs different rules. Values can be `false`, `"none"`, a key, a full binding object, or arrays of keys/binding objects. `false`, `"none"`, and empty arrays emit no bindings. The command name comes from the record key.
+
+```ts
+import { resolveBindingSections } from "@opentui/keymap/extras"
+
+const resolved = resolveBindingSections({
+  app: {
+    "command.palette.show": "ctrl+p",
+    "app.exit": ["ctrl+c", "<leader>q"],
+  },
+  prompt_input: {
+    "prompt.paste": { key: "ctrl+v", preventDefault: false },
+    "prompt.history.previous": "up",
+    "prompt.history.next": "down",
+  },
+})
+
+keymap.registerLayer({ bindings: resolved.sections.app })
+resolved.get("app", "app.exit")
+```
+
+Tokens such as `<leader>` are still registered through the normal keymap token APIs.
 
 `dispatchCommand()` respects current activation and can return `inactive` or `disabled` when the command exists but is not currently dispatchable. `runCommand()` walks the registered chain directly, so it can execute command-only layers programmatically even when they do not have an active binding.
 
@@ -199,10 +264,11 @@ Command handlers may be sync or async. Only a synchronous `false` rejects the ca
 
 ### Queries
 
-| Method                      | Description                                                                   |
-| --------------------------- | ----------------------------------------------------------------------------- |
-| `getCommands(query?)`       | Returns command metadata records                                              |
-| `getCommandEntries(query?)` | Returns command metadata plus the bindings that currently invoke each command |
+| Method                      | Description                                                                    |
+| --------------------------- | ------------------------------------------------------------------------------ |
+| `getCommands(query?)`       | Returns command metadata records                                               |
+| `getCommandEntries(query?)` | Returns command metadata plus bindings for command discovery UIs               |
+| `getCommandBindings(query)` | Returns bindings grouped by requested command name for known-command label UIs |
 
 `CommandQuery` fields:
 
@@ -218,6 +284,29 @@ Command handlers may be sync or async. Only a synchronous `false` rejects the ca
 - `reachable` dedupes by command name using the current dispatch winner.
 - `active` keeps every active candidate in precedence order, including same-name duplicates.
 - `registered` ignores focus and returns all registered commands.
+
+Use `getCommandEntries()` for command palettes, searchable help screens and other discovery surfaces that need command records plus their bindings. It runs the full `CommandQuery`, materializes command metadata and attaches matching bindings, so it is the heavier query.
+
+Use `getCommandBindings()` when a UI already knows the commands it wants to label and only needs their bindings:
+
+```ts
+const bindingsByCommand = keymap.getCommandBindings({
+  visibility: "registered",
+  commands: ["file.save", "app.quit"],
+})
+
+const saveBindings = bindingsByCommand.get("file.save") ?? []
+```
+
+The returned map preserves the requested command order and includes every requested command with `[]` when no matching bindings exist. Formatting remains app-owned; each returned `ActiveBinding` includes its parsed `sequence`.
+
+`CommandBindingsQuery` fields:
+
+| Field        | Description                                            |
+| ------------ | ------------------------------------------------------ |
+| `commands`   | Command names to include as map keys                   |
+| `visibility` | `"reachable"` (default), `"active"`, or `"registered"` |
+| `focused`    | Override the focus context used by the query           |
 
 ## Events and intercepts
 

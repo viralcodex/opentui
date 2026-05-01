@@ -123,6 +123,7 @@ export interface KeySequencePart {
 
 export interface StringifyOptions {
   preferDisplay?: boolean
+  separator?: string
 }
 
 export type KeyStringifyInput =
@@ -154,6 +155,12 @@ export interface CommandQuery<TTarget extends object = object> {
   search?: string
   searchIn?: readonly string[]
   filter?: CommandFilter
+}
+
+export interface CommandBindingsQuery<TTarget extends object = object> {
+  visibility?: "reachable" | "active" | "registered"
+  focused?: TTarget | null
+  commands: readonly string[]
 }
 
 export interface RunCommandOptions<TTarget extends object = object, TEvent extends KeymapEvent = KeymapEvent> {
@@ -213,14 +220,10 @@ export interface BindingInput<TTarget extends object = object, TEvent extends Ke
   [key: string]: unknown
 }
 
-export type BindingShorthand<TTarget extends object = object, TEvent extends KeymapEvent = KeymapEvent> = Record<
-  string,
-  BindingCommand<TTarget, TEvent>
->
-
-export type Bindings<TTarget extends object = object, TEvent extends KeymapEvent = KeymapEvent> =
-  | BindingInput<TTarget, TEvent>[]
-  | BindingShorthand<TTarget, TEvent>
+export type Bindings<TTarget extends object = object, TEvent extends KeymapEvent = KeymapEvent> = readonly BindingInput<
+  TTarget,
+  TEvent
+>[]
 
 export type TargetMode = "focus" | "focus-within"
 
@@ -470,6 +473,21 @@ export type BindingTransformer<TTarget extends object = object, TEvent extends K
   binding: ParsedBindingInput<TTarget, TEvent>,
   ctx: BindingTransformerContext<TTarget, TEvent>,
 ) => void
+
+export type BindingInputsValidationResult = { ok: true } | { ok: false; reason: string }
+
+export interface LayerBindingsTransformerContext<
+  TTarget extends object = object,
+  TEvent extends KeymapEvent = KeymapEvent,
+> {
+  layer: Readonly<Layer<TTarget, TEvent>>
+  validateBindings(bindings: unknown): BindingInputsValidationResult
+}
+
+export type LayerBindingsTransformer<TTarget extends object = object, TEvent extends KeymapEvent = KeymapEvent> = (
+  bindings: readonly BindingInput<TTarget, TEvent>[],
+  ctx: LayerBindingsTransformerContext<TTarget, TEvent>,
+) => readonly BindingInput<TTarget, TEvent>[] | void
 
 export interface CommandFieldContext {
   require(name: string, value: unknown): void

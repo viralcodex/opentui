@@ -25,7 +25,11 @@ import type {
 import { RESERVED_LAYER_FIELDS } from "../schema.js"
 import type { State } from "./state.js"
 import type { NotificationService } from "./notify.js"
-import { snapshotBindingInputs, snapshotParsedBindingInput } from "./primitives/binding-inputs.js"
+import {
+  snapshotBindingInputs,
+  snapshotParsedBindingInput,
+  validateBindingInputs,
+} from "./primitives/binding-inputs.js"
 import { mergeRequirement } from "./primitives/field-invariants.js"
 import { cloneKeySequence } from "./keys.js"
 import { getErrorMessage, snapshotDataValue } from "./values.js"
@@ -182,7 +186,7 @@ export class LayerService<TTarget extends object, TEvent extends KeymapEvent> {
 
       try {
         targetMode = this.normalizeTargetMode(layer)
-        bindingInputs = snapshotBindingInputs(layer.bindings ?? [])
+        bindingInputs = this.applyLayerBindingsTransformers(snapshotBindingInputs(layer.bindings ?? []), layer)
         commands =
           !layer.commands || layer.commands.length === 0 ? [] : this.options.commands.normalizeCommands(layer.commands)
         commandLookup = createCommandLookup(commands)
@@ -375,6 +379,32 @@ export class LayerService<TTarget extends object, TEvent extends KeymapEvent> {
     }
 
     return layer.target ? "focus-within" : undefined
+  }
+
+  private applyLayerBindingsTransformers(
+    bindings: BindingInput<TTarget, TEvent>[],
+    layer: Layer<TTarget, TEvent>,
+  ): BindingInput<TTarget, TEvent>[] {
+    const transformers = this.state.environment.layerBindingsTransformers.values()
+    if (transformers.length === 0) {
+      return bindings
+    }
+
+    let current = bindings
+
+    for (const transformer of transformers) {
+      const next = transformer(current, {
+        layer,
+        validateBindings: (bindings) => validateBindingInputs(bindings),
+      })
+      if (!next) {
+        continue
+      }
+
+      current = snapshotBindingInputs(next)
+    }
+
+    return current
   }
 
   private runLayerAnalyzers(options: AnalyzeLayerOptions<TTarget, TEvent>): void {

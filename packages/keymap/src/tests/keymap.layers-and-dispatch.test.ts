@@ -310,30 +310,27 @@ describe("keymap: layers and dispatch", () => {
     expect(renderableCount).toBe(1)
   })
 
-  test("supports object shorthand bindings", () => {
+  test("registerLayer emits an error when bindings is not an array", () => {
     const keymap = getKeymap(renderer)
+    const { takeErrors } = captureDiagnostics(keymap)
     const calls: string[] = []
 
     keymap.registerLayer({
       commands: [
-        {
-          name: "shorthand",
-          run() {
-            calls.push("shorthand")
-          },
-        },
+        { name: "save-file", run: () => calls.push("save") },
+        { name: "quit", run: () => calls.push("quit") },
       ],
     })
 
     keymap.registerLayer({
-      bindings: {
-        x: "shorthand",
-      },
+      bindings: { quit: "q" } as never,
     })
 
-    mockInput.pressKey("x")
+    mockInput.pressKey("q")
 
-    expect(calls).toEqual(["shorthand"])
+    expect(calls).toEqual([])
+    expect(getActiveKeyNames(keymap)).toEqual([])
+    expect(takeErrors().errors).toEqual(["Invalid keymap bindings: expected an array of binding objects"])
   })
 
   test("allows duplicate command names across layers and dedupes reachable commands by name", () => {

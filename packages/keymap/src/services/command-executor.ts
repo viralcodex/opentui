@@ -10,7 +10,8 @@ import type {
   RunCommandOptions,
   RunCommandResult,
 } from "../types.js"
-import { type CommandCatalogService, normalizeBindingCommand } from "./command-catalog.js"
+import { normalizeBindingCommand } from "./primitives/command-normalization.js"
+import type { CommandCatalogService } from "./command-catalog.js"
 import type { ActivationService } from "./activation.js"
 import type { NotificationService } from "./notify.js"
 import type { RuntimeService } from "./runtime.js"
@@ -93,7 +94,7 @@ export class CommandExecutorService<TTarget extends object, TEvent extends Keyma
       }
     }
 
-    const fallback = this.catalog.getRegisteredResolverFallback(normalized, includeRecord)
+    const fallback = this.catalog.resolveRegisteredResolverFallback(normalized, includeRecord)
     if (fallback.resolved) {
       const execution = this.executeResolvedCommand(normalized, fallback.resolved, {
         keymap: this.options.keymap,
@@ -134,8 +135,7 @@ export class CommandExecutorService<TTarget extends object, TEvent extends Keyma
     const focused = options?.focused ?? this.activation.getFocusedTargetIfAvailable()
     const event = options?.event ?? this.options.createCommandEvent()
     const data = this.runtime.getReadonlyData()
-    const chainLookup = this.catalog.getResolvedCommandChain(normalized, focused, includeRecord)
-    const chain = chainLookup.entries
+    const chain = this.catalog.getActiveRegisteredResolvedEntries(normalized, focused, includeRecord)
     let rejectedResult: RunCommandResult | undefined
 
     if (chain?.length === 1) {
@@ -174,7 +174,24 @@ export class CommandExecutorService<TTarget extends object, TEvent extends Keyma
       }
     }
 
-    if (chainLookup.hadError) {
+    const fallback = this.catalog.resolveActiveResolverFallback(normalized, focused, includeRecord)
+    if (fallback.resolved) {
+      const execution = this.executeResolvedCommand(normalized, fallback.resolved, {
+        keymap: this.options.keymap,
+        event,
+        focused,
+        target: options?.target ?? null,
+        data,
+      })
+
+      if (execution.status === "handled" || execution.status === "error") {
+        return execution.result
+      }
+
+      rejectedResult = execution.result
+    }
+
+    if (fallback.hadError) {
       return { ok: false, reason: "error" }
     }
 

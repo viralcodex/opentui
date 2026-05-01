@@ -1,15 +1,16 @@
 import type {
+  ActiveBinding,
   ActiveKey,
   ActiveKeyOptions,
-  BindingInput,
   BindingExpander,
   BindingParser,
   BindingFieldCompiler,
-  Bindings,
+  LayerBindingsTransformer,
   BindingTransformer,
   Events,
   Hooks,
   CommandFieldCompiler,
+  CommandBindingsQuery,
   CommandEntry,
   CommandQuery,
   CommandRecord,
@@ -33,9 +34,10 @@ import type {
   KeyToken,
   KeyLike,
   KeySequencePart,
+  StringifyOptions,
 } from "./types.js"
 import { ActivationService } from "./services/activation.js"
-import { CommandCatalogService, normalizeCommandName } from "./services/command-catalog.js"
+import { CommandCatalogService } from "./services/command-catalog.js"
 import { CommandExecutorService } from "./services/command-executor.js"
 import { CompilerService } from "./services/compiler.js"
 import { ConditionService } from "./services/conditions.js"
@@ -46,7 +48,6 @@ import { Emitter, type EmitterListener } from "./lib/emitter.js"
 import { NotificationService } from "./services/notify.js"
 import { resolveKeyMatch } from "./services/keys.js"
 import { RuntimeService } from "./services/runtime.js"
-import { normalizeBindingInputs } from "./services/primitives/binding-inputs.js"
 import { createKeymapState } from "./services/state.js"
 
 type DiagnosticEvents<TTarget extends object, TEvent extends KeymapEvent> = Pick<
@@ -221,6 +222,14 @@ export class Keymap<TTarget extends object, TEvent extends KeymapEvent = KeymapE
     }
   }
 
+  public parseKeySequence(key: KeyLike): readonly KeySequencePart[] {
+    return this.compiler.parseKeySequence(key)
+  }
+
+  public formatKey(key: KeyLike, options?: StringifyOptions): string {
+    return this.compiler.formatKey(key, options)
+  }
+
   public clearPendingSequence(): void {
     this.activation.setPendingSequence(null)
   }
@@ -241,12 +250,10 @@ export class Keymap<TTarget extends object, TEvent extends KeymapEvent = KeymapE
     return this.catalog.getCommandEntries(query)
   }
 
-  public normalizeCommandName(name: string): string {
-    return normalizeCommandName(name)
-  }
-
-  public normalizeBindings(bindings: Bindings<TTarget, TEvent>): BindingInput<TTarget, TEvent>[] {
-    return normalizeBindingInputs(bindings)
+  public getCommandBindings(
+    query: CommandBindingsQuery<TTarget>,
+  ): ReadonlyMap<string, readonly ActiveBinding<TTarget, TEvent>[]> {
+    return this.catalog.getCommandBindings(query)
   }
 
   public acquireResource(key: symbol, setup: () => () => void): () => void {
@@ -324,6 +331,18 @@ export class Keymap<TTarget extends object, TEvent extends KeymapEvent = KeymapE
 
   public registerLayerFields(fields: Record<string, LayerFieldCompiler>): () => void {
     return this.environment.registerLayerFields(fields)
+  }
+
+  public prependLayerBindingsTransformer(transformer: LayerBindingsTransformer<TTarget, TEvent>): () => void {
+    return this.environment.prependLayerBindingsTransformer(transformer)
+  }
+
+  public appendLayerBindingsTransformer(transformer: LayerBindingsTransformer<TTarget, TEvent>): () => void {
+    return this.environment.appendLayerBindingsTransformer(transformer)
+  }
+
+  public clearLayerBindingsTransformers(): void {
+    this.environment.clearLayerBindingsTransformers()
   }
 
   public prependBindingTransformer(transformer: BindingTransformer<TTarget, TEvent>): () => void {
