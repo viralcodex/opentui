@@ -666,6 +666,31 @@ test "GraphemeTracker - add same grapheme twice increfs once" {
     try std.testing.expectError(gp.GraphemePoolError.WrongGeneration, result);
 }
 
+test "GraphemeTracker - add stale id ignores wrong generation" {
+    var pool = GraphemePool.initWithOptions(std.testing.allocator, .{
+        .slots_per_page = .{ 1, 1, 1, 1, 1 },
+    });
+    defer pool.deinit();
+
+    const stale_id = try pool.alloc("a");
+    try pool.incref(stale_id);
+    try pool.decref(stale_id);
+
+    const live_id = try pool.alloc("b");
+    try std.testing.expect(stale_id != live_id);
+
+    var tracker = GraphemeTracker.init(std.testing.allocator, &pool);
+    defer tracker.deinit();
+
+    tracker.add(stale_id);
+    try std.testing.expectEqual(@as(u32, 0), tracker.getGraphemeCount());
+    try std.testing.expect(!tracker.contains(stale_id));
+
+    tracker.add(live_id);
+    try std.testing.expectEqual(@as(u32, 1), tracker.getGraphemeCount());
+    try std.testing.expect(tracker.contains(live_id));
+}
+
 test "GraphemeTracker - remove grapheme" {
     var pool = GraphemePool.init(std.testing.allocator);
     defer pool.deinit();

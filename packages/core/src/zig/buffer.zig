@@ -439,8 +439,6 @@ pub const OptimizedBuffer = struct {
         @memset(self.buffer.bg, bg);
     }
 
-    /// Write a single cell and update link tracker. No grapheme tracking,
-    /// span cleanup, or continuation propagation.
     pub fn setRaw(self: *OptimizedBuffer, x: u32, y: u32, cell: Cell) void {
         const index = self.validateAndIndex(x, y) orelse return;
         self.writeCellAndLinks(index, cell);
@@ -604,7 +602,6 @@ pub const OptimizedBuffer = struct {
         return self.coordsToIndex(x, y);
     }
 
-    /// Write cell data at index and update link tracker.
     fn writeCellAndLinks(self: *OptimizedBuffer, index: u32, cell: Cell) void {
         const prev_link_id = ansi.TextAttributes.getLinkId(self.buffer.attributes[index]);
         const new_link_id = ansi.TextAttributes.getLinkId(cell.attributes);
@@ -1120,6 +1117,7 @@ pub const OptimizedBuffer = struct {
             if (grapheme_bytes.len == 1 and cell_width == 1 and grapheme_bytes[0] >= 32) {
                 encoded_char = @as(u32, grapheme_bytes[0]);
             } else {
+                if (cell_width > self.width - charX) break;
                 const gid = self.pool.alloc(grapheme_bytes) catch return BufferError.OutOfMemory;
                 encoded_char = gp.packGraphemeStart(gid & gp.GRAPHEME_ID_MASK, cell_width);
             }
@@ -1467,6 +1465,14 @@ pub const OptimizedBuffer = struct {
                         column_in_line += g_width;
                         col += g_width;
                         continue;
+                    }
+
+                    if (currentX >= 0) {
+                        const charX: u32 = @intCast(currentX);
+                        if (g_width > self.width - charX) {
+                            globalCharPos += (col_end - col);
+                            break;
+                        }
                     }
 
                     var selection_offset = globalCharPos;
@@ -1895,8 +1901,8 @@ pub const OptimizedBuffer = struct {
         const isAtActualTop = startY == y;
         const isAtActualBottom = endY == y + @as(i32, @intCast(height)) - 1;
 
-        const titleLayout = self.computeBoxTitleLayout(title, borderSides.top, isAtActualTop, startX, endX, width, titleAlignment);
-        const bottomTitleLayout = self.computeBoxTitleLayout(bottomTitle, borderSides.bottom, isAtActualBottom, startX, endX, width, bottomTitleAlignment);
+        const titleLayout = self.computeBoxTitleLayout(title, borderSides.top, isAtActualTop, startX, endX, boxWidth, titleAlignment);
+        const bottomTitleLayout = self.computeBoxTitleLayout(bottomTitle, borderSides.bottom, isAtActualBottom, startX, endX, boxWidth, bottomTitleAlignment);
 
         if (shouldFill) {
             if (!borderSides.top and !borderSides.right and !borderSides.bottom and !borderSides.left) {
@@ -2072,7 +2078,9 @@ pub const OptimizedBuffer = struct {
         const titleLength = @as(i32, @intCast(utf8.calculateTextWidth(text, 2, is_ascii, self.width_method)));
         const minTitleSpace = 4;
 
-        if (@as(i32, @intCast(width)) < titleLength + minTitleSpace) {
+        const availableWidth = @as(i32, @intCast(width));
+
+        if (availableWidth < titleLength + minTitleSpace) {
             return .{ .x = startX };
         }
 
@@ -2080,9 +2088,9 @@ pub const OptimizedBuffer = struct {
         var titleX = startX + padding;
 
         if (alignment == 1) {
-            titleX = startX + @max(padding, @divFloor(@as(i32, @intCast(width)) - titleLength, 2));
+            titleX = startX + @max(padding, @divFloor(availableWidth - titleLength, 2));
         } else if (alignment == 2) {
-            titleX = startX + @as(i32, @intCast(width)) - padding - titleLength;
+            titleX = startX + availableWidth - padding - titleLength;
         }
 
         titleX = @max(startX + padding, @min(titleX, endX - titleLength));

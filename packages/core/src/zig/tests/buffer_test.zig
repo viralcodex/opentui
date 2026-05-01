@@ -8,9 +8,12 @@ const link = @import("../link.zig");
 const ansi = @import("../ansi.zig");
 
 const OptimizedBuffer = buffer_mod.OptimizedBuffer;
+const BorderSides = buffer_mod.BorderSides;
 const TextBuffer = text_buffer.UnifiedTextBuffer;
 const TextBufferView = text_buffer_view.UnifiedTextBufferView;
 const RGBA = buffer_mod.RGBA;
+const singleLineBorderChars = [_]u32{ '┌', '┐', '└', '┘', '─', '│', '┬', '┴', '├', '┤', '┼' };
+const wideTestChar = "界";
 
 fn initBufferForOomRegression(allocator: std.mem.Allocator) !void {
     var local_pool = gp.GraphemePool.initWithOptions(allocator, .{});
@@ -102,6 +105,87 @@ test "OptimizedBuffer - drawText with ASCII" {
 
     const cell_e = buf.get(1, 0).?;
     try std.testing.expectEqual(@as(u32, 'e'), cell_e.char);
+}
+
+test "OptimizedBuffer - drawTextBuffer skips wide char that overflows row" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+    var local_link_pool = link.LinkPool.init(std.testing.allocator);
+    defer local_link_pool.deinit();
+
+    var tb = try TextBuffer.init(std.testing.allocator, pool, &local_link_pool, .wcwidth);
+    defer tb.deinit();
+
+    var view = try TextBufferView.init(std.testing.allocator, tb);
+    defer view.deinit();
+
+    try tb.setText(wideTestChar);
+
+    var buf = try OptimizedBuffer.init(
+        std.testing.allocator,
+        4,
+        1,
+        .{ .pool = pool, .id = "drawtextbuffer-overflow", .link_pool = &local_link_pool },
+    );
+    defer buf.deinit();
+
+    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
+    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
+    try buf.clear(bg, null);
+
+    buf.set(3, 0, .{
+        .char = '-',
+        .fg = fg,
+        .bg = bg,
+        .attributes = 0,
+    });
+
+    try buf.drawTextBuffer(view, 3, 0);
+
+    const edge_cell = buf.get(3, 0).?;
+    try std.testing.expectEqual(@as(u32, '-'), edge_cell.char);
+    try std.testing.expectEqual(@as(u32, 0), buf.grapheme_tracker.getGraphemeCount());
+}
+
+test "OptimizedBuffer - drawBox omits clipped right-aligned wide bottom title" {
+    const pool = gp.initGlobalPool(std.testing.allocator);
+    defer gp.deinitGlobalPool();
+    var local_link_pool = link.LinkPool.init(std.testing.allocator);
+    defer local_link_pool.deinit();
+
+    var buf = try OptimizedBuffer.init(
+        std.testing.allocator,
+        12,
+        5,
+        .{ .pool = pool, .id = "drawbox-clipped-title", .link_pool = &local_link_pool },
+    );
+    defer buf.deinit();
+
+    const bg = ansi.rgbaFromFloats(0.0, 0.0, 0.0, 1.0);
+    const fg = ansi.rgbaFromFloats(1.0, 1.0, 1.0, 1.0);
+    try buf.clear(bg, null);
+
+    try buf.drawBox(
+        8,
+        0,
+        6,
+        5,
+        &singleLineBorderChars,
+        BorderSides{ .top = true, .right = true, .bottom = true, .left = true },
+        fg,
+        bg,
+        false,
+        null,
+        0,
+        wideTestChar,
+        2,
+    );
+
+    try std.testing.expectEqual(@as(u32, '└'), buf.get(8, 4).?.char);
+    try std.testing.expectEqual(@as(u32, '─'), buf.get(9, 4).?.char);
+    try std.testing.expectEqual(@as(u32, '─'), buf.get(10, 4).?.char);
+    try std.testing.expectEqual(@as(u32, '─'), buf.get(11, 4).?.char);
+    try std.testing.expectEqual(@as(u32, 0), buf.grapheme_tracker.getGraphemeCount());
 }
 
 test "OptimizedBuffer - alpha blending downgrades blended metadata to rgb" {
