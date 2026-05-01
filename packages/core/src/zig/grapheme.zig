@@ -538,7 +538,7 @@ pub const GraphemeTracker = struct {
         if (!res.found_existing) {
             res.value_ptr.* = 1;
             self.pool.incref(id) catch |err| {
-                self.used_ids.remove(id);
+                _ = self.used_ids.remove(id);
                 switch (err) {
                     GraphemePoolError.InvalidId, GraphemePoolError.WrongGeneration => return,
                     GraphemePoolError.OutOfMemory => std.debug.panic("GraphemeTracker.add incref failed: {}\n", .{err}),
