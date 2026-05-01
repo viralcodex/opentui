@@ -439,6 +439,8 @@ pub const OptimizedBuffer = struct {
         @memset(self.buffer.bg, bg);
     }
 
+    /// Write a single cell and update link tracker. No grapheme tracking,
+    /// span cleanup, or continuation propagation.
     pub fn setRaw(self: *OptimizedBuffer, x: u32, y: u32, cell: Cell) void {
         const index = self.validateAndIndex(x, y) orelse return;
         self.writeCellAndLinks(index, cell);
@@ -602,6 +604,7 @@ pub const OptimizedBuffer = struct {
         return self.coordsToIndex(x, y);
     }
 
+    /// Write cell data at index and update link tracker.
     fn writeCellAndLinks(self: *OptimizedBuffer, index: u32, cell: Cell) void {
         const prev_link_id = ansi.TextAttributes.getLinkId(self.buffer.attributes[index]);
         const new_link_id = ansi.TextAttributes.getLinkId(cell.attributes);
